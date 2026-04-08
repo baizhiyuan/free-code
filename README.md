@@ -5,16 +5,16 @@
 <h1 align="center">free-code</h1>
 
 <p align="center">
-  <strong>The free build of Claude Code.</strong><br>
-  All telemetry stripped. All guardrails removed. All experimental features unlocked.<br>
-  One binary, zero callbacks home.
+  <strong>An OpenAI-direct-capable fork of the leaked Claude Code snapshot.</strong><br>
+  Supports OpenAI-compatible Responses endpoints, Codex-style config compatibility,<br>
+  stripped telemetry/guardrails, and a publish-safe local-first workflow.
 </p>
 
 <p align="center">
   <a href="#quick-install"><img src="https://img.shields.io/badge/install-one--liner-blue?style=flat-square" alt="Install" /></a>
-  <a href="https://github.com/paoloanzn/free-code/stargazers"><img src="https://img.shields.io/github/stars/paoloanzn/free-code?style=flat-square" alt="Stars" /></a>
-  <a href="https://github.com/paoloanzn/free-code/issues"><img src="https://img.shields.io/github/issues/paoloanzn/free-code?style=flat-square" alt="Issues" /></a>
-  <a href="https://github.com/paoloanzn/free-code/blob/main/FEATURES.md"><img src="https://img.shields.io/badge/features-88%20flags-orange?style=flat-square" alt="Feature Flags" /></a>
+  <a href="https://github.com/baizhiyuan/free-code/stargazers"><img src="https://img.shields.io/github/stars/baizhiyuan/free-code?style=flat-square" alt="Stars" /></a>
+  <a href="https://github.com/baizhiyuan/free-code/issues"><img src="https://img.shields.io/github/issues/baizhiyuan/free-code?style=flat-square" alt="Issues" /></a>
+  <a href="https://github.com/baizhiyuan/free-code/blob/main/FEATURES.md"><img src="https://img.shields.io/badge/features-88%20flags-orange?style=flat-square" alt="Feature Flags" /></a>
   <a href="#ipfs-mirror"><img src="https://img.shields.io/badge/IPFS-mirrored-teal?style=flat-square" alt="IPFS" /></a>
 </p>
 
@@ -23,7 +23,7 @@
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/paoloanzn/free-code/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/baizhiyuan/free-code/main/install.sh | bash
 ```
 
 Checks your system, installs Bun if needed, clones the repo, builds with all experimental features enabled, and symlinks `free-code` on your PATH.
@@ -51,9 +51,42 @@ Then run `free-code` and authenticate with the provider path you want: use `/log
 
 ## What is this
 
-A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI -- the terminal-native AI coding agent. The upstream source became publicly available on March 31, 2026 through a source map exposure in the npm distribution.
+A maintained fork of Anthropic's leaked [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI snapshot, now oriented around practical local use rather than upstream product defaults.
 
-This fork applies three categories of changes on top of that snapshot:
+The original source became publicly reconstructable from npm-distributed source maps. This fork keeps that base, but it is no longer just a mirror: it adds a distinct OpenAI-direct path, safer publish defaults, and a clearer local-first runtime story.
+
+## Why this fork
+
+This fork is useful if you want one or more of the following:
+
+- **OpenAI Direct support** for OpenAI-compatible Responses endpoints
+- **Codex-style compatibility config** via `~/.codex/config.toml`
+- **Telemetry stripped** and guardrail overlays reduced
+- **Experimental features unlocked** beyond the public npm release defaults
+- **Verification guards** that keep OpenAI/provider/auth/transport boundaries from regressing
+
+## What this fork changes
+
+### OpenAI Direct support
+
+The fork now includes a direct OpenAI provider path that:
+
+- prefers `OPENAI_API_KEY` over browser-bound Codex assumptions
+- targets OpenAI-compatible `/v1/responses` endpoints
+- keeps ChatGPT/Codex-specific headers isolated to the explicit legacy fallback path
+- supports sanitized public examples and local private configuration
+
+### Codex-style compatibility config
+
+The fork can read a Codex-style compatibility file at `~/.codex/config.toml`, including:
+
+- `model_provider`
+- `model`
+- `review_model`
+- `model_reasoning_effort`
+- `model_context_window`
+- `model_auto_compact_token_limit`
+- `[model_providers.OpenAI]`
 
 ### Telemetry removed
 
@@ -63,7 +96,7 @@ The upstream binary phones home through OpenTelemetry/gRPC, GrowthBook analytics
 - GrowthBook feature flag evaluation still works locally (needed for runtime feature gates) but does not report back
 - No crash reports, no usage analytics, no session fingerprinting
 
-### Security-prompt guardrails removed
+### Security-prompt guardrails reduced
 
 Anthropic injects system-level instructions into every conversation that constrain Claude's behavior beyond what the model itself enforces. These include hardcoded refusal patterns, injected "cyber risk" instruction blocks, and managed-settings security overlays pushed from Anthropic's servers.
 
@@ -197,7 +230,7 @@ curl -fsSL https://bun.sh/install | bash
 ## Build
 
 ```bash
-git clone https://github.com/paoloanzn/free-code.git
+git clone https://github.com/baizhiyuan/free-code.git
 cd free-code
 bun build
 ./cli

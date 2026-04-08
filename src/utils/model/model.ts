@@ -13,7 +13,6 @@ import {
   isMaxSubscriber,
   isProSubscriber,
   isTeamPremiumSubscriber,
-  isCodexSubscriber,
 } from '../auth.js'
 import { getAntModelOverrideConfig, resolveAntModel } from './antModels.js'
 import {
@@ -31,6 +30,7 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
+import { getOpenAICompatModel } from '../openaiCompatConfig.js'
 
 export type ModelShortName = string
 export type ModelName = string
@@ -69,7 +69,11 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
     specifiedModel = modelOverride
   } else {
     const settings = getSettings_DEPRECATED() || {}
-    specifiedModel = process.env.ANTHROPIC_MODEL || settings.model || undefined
+    specifiedModel =
+      process.env.ANTHROPIC_MODEL ||
+      settings.model ||
+      (getAPIProvider() === 'openai' ? getOpenAICompatModel() : undefined) ||
+      undefined
   }
 
   // Ignore the user-specified model if it's not in the availableModels allowlist.
@@ -179,8 +183,8 @@ export function getRuntimeMainLoopModel(params: {
  * @returns The default model setting to use
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
-  if (isCodexSubscriber()) {
-    return getModelStrings().gpt53codex
+  if (getAPIProvider() === 'openai') {
+    return getOpenAICompatModel() || getModelStrings().gpt54
   }
 
   // Ants default to defaultModel from flag config, or Opus 1M if not configured

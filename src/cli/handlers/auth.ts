@@ -24,6 +24,7 @@ import {
   clearOAuthTokenCache,
   getAnthropicApiKeyWithSource,
   getAuthTokenSource,
+  getCodexOAuthTokens,
   getOauthAccountInfo,
   getSubscriptionType,
   isUsing3PServices,
@@ -254,20 +255,31 @@ export async function authStatus(opts: {
   json?: boolean
   text?: boolean
 }): Promise<void> {
+  const apiProvider = getAPIProvider()
   const { source: authTokenSource, hasToken } = getAuthTokenSource()
   const { source: apiKeySource } = getAnthropicApiKeyWithSource()
+  const hasCodexOAuth = apiProvider === 'openai' && !!getCodexOAuthTokens()
+  const hasOpenAIApiKeyEnvVar =
+    apiProvider === 'openai' && !!process.env.OPENAI_API_KEY
   const hasApiKeyEnvVar =
     !!process.env.ANTHROPIC_API_KEY && !isRunningOnHomespace()
   const oauthAccount = getOauthAccountInfo()
   const subscriptionType = getSubscriptionType()
   const using3P = isUsing3PServices()
   const loggedIn =
-    hasToken || apiKeySource !== 'none' || hasApiKeyEnvVar || using3P
+    using3P ||
+    (apiProvider === 'openai'
+      ? hasCodexOAuth || hasOpenAIApiKeyEnvVar
+      : hasToken || apiKeySource !== 'none' || hasApiKeyEnvVar)
 
   // Determine auth method
   let authMethod: string = 'none'
   if (using3P) {
     authMethod = 'third_party'
+  } else if (hasOpenAIApiKeyEnvVar) {
+    authMethod = 'api_key'
+  } else if (hasCodexOAuth) {
+    authMethod = 'oauth_token'
   } else if (authTokenSource === 'claude.ai') {
     authMethod = 'claude.ai'
   } else if (authTokenSource === 'apiKeyHelper') {
@@ -303,18 +315,33 @@ export async function authStatus(opts: {
         process.stdout.write(`${value}\n`)
       }
     }
+    if (hasOpenAIApiKeyEnvVar) {
+      hasAuthProperty = true
+      process.stdout.write('API key: OPENAI_API_KEY\n')
+    }
+    if (hasCodexOAuth) {
+      hasAuthProperty = true
+      process.stdout.write('Auth token: OpenAI OAuth (legacy Codex web flow)\n')
+    }
     if (!hasAuthProperty && hasApiKeyEnvVar) {
       process.stdout.write('API key: ANTHROPIC_API_KEY\n')
     }
     if (!loggedIn) {
-      process.stdout.write(
-        'Not logged in. Run claude auth login to authenticate.\n',
-      )
+      if (apiProvider === 'openai') {
+        process.stdout.write(
+          'OpenAI direct mode is not configured. Set OPENAI_API_KEY for direct access, or use claude auth login only for the legacy Codex web flow.\n',
+        )
+      } else {
+        process.stdout.write(
+          'Not logged in. Run claude auth login to authenticate.\n',
+        )
+      }
     }
   } else {
-    const apiProvider = getAPIProvider()
     const resolvedApiKeySource =
-      apiKeySource !== 'none'
+      hasOpenAIApiKeyEnvVar
+        ? 'OPENAI_API_KEY'
+        : apiKeySource !== 'none'
         ? apiKeySource
         : hasApiKeyEnvVar
           ? 'ANTHROPIC_API_KEY'

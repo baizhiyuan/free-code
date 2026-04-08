@@ -10,6 +10,8 @@ import { normalizeApiKeyForConfig } from '../utils/authPortable.js';
 import { getCustomApiKeyStatus } from '../utils/config.js';
 import { env } from '../utils/env.js';
 import { isRunningOnHomespace } from '../utils/envUtils.js';
+import { getAPIProvider } from '../utils/model/providers.js';
+import { getOpenAIBaseUrl } from '../utils/openaiCompatConfig.js';
 import { PreflightStep } from '../utils/preflightChecks.js';
 import type { ThemeSetting } from '../utils/theme.js';
 import { ApproveApiKey } from './ApproveApiKey.js';
@@ -19,7 +21,7 @@ import { WelcomeV2 } from './LogoV2/WelcomeV2.js';
 import { PressEnterToContinue } from './PressEnterToContinue.js';
 import { ThemePicker } from './ThemePicker.js';
 import { OrderedList } from './ui/OrderedList.js';
-type StepId = 'preflight' | 'theme' | 'oauth' | 'api-key' | 'security' | 'terminal-setup';
+type StepId = 'preflight' | 'theme' | 'oauth' | 'openai-direct' | 'api-key' | 'security' | 'terminal-setup';
 interface OnboardingStep {
   id: StepId;
   component: React.ReactNode;
@@ -33,6 +35,8 @@ export function Onboarding({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [skipOAuth, setSkipOAuth] = useState(false);
   const [oauthEnabled] = useState(() => isAnthropicAuthEnabled());
+  const isOpenAIDirectProvider = getAPIProvider() === 'openai';
+  const openAIBaseUrl = getOpenAIBaseUrl();
   const [theme, setTheme] = useTheme();
   useEffect(() => {
     logEvent('tengu_began_setup', {
@@ -93,6 +97,20 @@ export function Onboarding({
       </Box>
       <PressEnterToContinue />
     </Box>;
+  const openAIDirectStep = <Box flexDirection="column" gap={1} paddingLeft={1}>
+      <Text bold>OpenAI direct setup</Text>
+      <Box flexDirection="column" width={72} gap={1}>
+        <Text>
+          OpenAI direct mode uses <Text bold>OPENAI_API_KEY</Text> and your configured relay base URL.
+          Browser login is optional and only used for the legacy Codex web flow.
+        </Text>
+        {openAIBaseUrl && <Text dimColor>Configured base URL: {openAIBaseUrl}</Text>}
+        <Text dimColor>
+          {process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY detected in the current environment.' : 'Set OPENAI_API_KEY before starting an interactive OpenAI direct session.'}
+        </Text>
+      </Box>
+      <PressEnterToContinue />
+    </Box>;
   const preflightStep = <PreflightStep onSuccess={goToNextStep} />;
   // Create the steps array - determine which steps to include based on reAuth and oauthEnabled
   const apiKeyNeedingApproval = useMemo(() => {
@@ -114,7 +132,7 @@ export function Onboarding({
     goToNextStep();
   }
   const steps: OnboardingStep[] = [];
-  if (oauthEnabled) {
+  if (oauthEnabled && !isOpenAIDirectProvider) {
     steps.push({
       id: 'preflight',
       component: preflightStep
@@ -130,7 +148,12 @@ export function Onboarding({
       component: <ApproveApiKey customApiKeyTruncated={apiKeyNeedingApproval} onDone={handleApiKeyDone} />
     });
   }
-  if (oauthEnabled) {
+  if (isOpenAIDirectProvider) {
+    steps.push({
+      id: 'openai-direct',
+      component: openAIDirectStep
+    });
+  } else if (oauthEnabled) {
     steps.push({
       id: 'oauth',
       component: <SkippableStep skip={skipOAuth} onSkip={goToNextStep}>
@@ -193,7 +216,7 @@ export function Onboarding({
     'confirm:yes': handleSecurityContinue
   }, {
     context: 'Confirmation',
-    isActive: currentStep?.id === 'security'
+    isActive: currentStep?.id === 'security' || currentStep?.id === 'openai-direct'
   });
   useKeybindings({
     'confirm:no': handleTerminalSetupSkip

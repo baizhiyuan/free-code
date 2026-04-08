@@ -13,6 +13,8 @@ import { runCodexOAuthFlow } from '../services/oauth/codex-client.js';
 import { OAuthService } from '../services/oauth/index.js';
 import { getOauthAccountInfo, saveCodexOAuthTokens, validateForceLoginOrg } from '../utils/auth.js';
 import { logError } from '../utils/log.js';
+import { getAPIProvider } from '../utils/model/providers.js';
+import { getOpenAIBaseUrl } from '../utils/openaiCompatConfig.js';
 import { getSettings_DEPRECATED } from '../utils/settings/settings.js';
 import { Select } from './CustomSelect/select.js';
 import { KeyboardShortcutHint } from './design-system/KeyboardShortcutHint.js';
@@ -59,6 +61,8 @@ export function ConsoleOAuthFlow({
   forceLoginMethod: forceLoginMethodProp
 }: Props): React.ReactNode {
   const settings = getSettings_DEPRECATED() || {};
+  const isOpenAIDirectProvider = getAPIProvider() === 'openai';
+  const openAIBaseUrl = getOpenAIBaseUrl();
   const forceLoginMethod = forceLoginMethodProp ?? settings.forceLoginMethod;
   const orgUUID = settings.forceLoginOrgUUID;
   const forcedMethodMessage = forceLoginMethod === 'claudeai' ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)' : forceLoginMethod === 'console' ? 'Login method pre-selected: API Usage Billing (Anthropic Console)' : null;
@@ -357,7 +361,7 @@ export function ConsoleOAuthFlow({
             </Box>
           </Box>}
       <Box paddingLeft={1} flexDirection="column" gap={1}>
-        <OAuthStatusMessage oauthStatus={oauthStatus} mode={mode} startingMessage={startingMessage} forcedMethodMessage={forcedMethodMessage} showPastePrompt={showPastePrompt} pastedCode={pastedCode} setPastedCode={setPastedCode} cursorOffset={cursorOffset} setCursorOffset={setCursorOffset} textInputColumns={textInputColumns} handleSubmitCode={handleSubmitCode} setOAuthStatus={setOAuthStatus} setLoginWithClaudeAi={setLoginWithClaudeAi} setLoginWithCodex={setLoginWithCodex} />
+        <OAuthStatusMessage oauthStatus={oauthStatus} mode={mode} startingMessage={startingMessage} forcedMethodMessage={forcedMethodMessage} isOpenAIDirectProvider={isOpenAIDirectProvider} showPastePrompt={showPastePrompt} pastedCode={pastedCode} setPastedCode={setPastedCode} cursorOffset={cursorOffset} setCursorOffset={setCursorOffset} textInputColumns={textInputColumns} handleSubmitCode={handleSubmitCode} setOAuthStatus={setOAuthStatus} setLoginWithClaudeAi={setLoginWithClaudeAi} setLoginWithCodex={setLoginWithCodex} />
       </Box>
     </Box>;
 }
@@ -366,6 +370,7 @@ type OAuthStatusMessageProps = {
   mode: 'login' | 'setup-token';
   startingMessage: string | undefined;
   forcedMethodMessage: string | null;
+  isOpenAIDirectProvider: boolean;
   showPastePrompt: boolean;
   pastedCode: string;
   setPastedCode: (value: string) => void;
@@ -384,6 +389,7 @@ function OAuthStatusMessage(t0) {
     mode,
     startingMessage,
     forcedMethodMessage,
+    isOpenAIDirectProvider,
     showPastePrompt,
     pastedCode,
     setPastedCode,
@@ -398,7 +404,7 @@ function OAuthStatusMessage(t0) {
   switch (oauthStatus.state) {
     case "idle":
       {
-        const t1 = startingMessage ? startingMessage : "Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.";
+        const t1 = startingMessage ? startingMessage : isOpenAIDirectProvider ? `OpenAI direct mode uses OPENAI_API_KEY and your configured relay base URL${openAIBaseUrl ? ` (${openAIBaseUrl})` : ''}. Browser login below is only for the legacy Codex web flow.` : "Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.";
         let t2;
         if ($[0] !== t1) {
           t2 = <Text bold={true}>{t1}</Text>;
@@ -407,13 +413,7 @@ function OAuthStatusMessage(t0) {
         } else {
           t2 = $[1];
         }
-        let t3;
-        if ($[2] === Symbol.for("react.memo_cache_sentinel")) {
-          t3 = <Text>Select login method:</Text>;
-          $[2] = t3;
-        } else {
-          t3 = $[2];
-        }
+        const t3 = <Text>{isOpenAIDirectProvider ? 'Select browser login method:' : 'Select login method:'}</Text>;
         let t4;
         if ($[3] === Symbol.for("react.memo_cache_sentinel")) {
           t4 = {
@@ -440,7 +440,7 @@ function OAuthStatusMessage(t0) {
             label: <Text>3rd-party platform ·{" "}<Text dimColor={true}>Amazon Bedrock, Microsoft Foundry, or Vertex AI</Text>{"\n"}</Text>,
             value: "platform"
           }, {
-            label: <Text>OpenAI Codex account ·{" "}<Text dimColor={true}>ChatGPT Plus/Pro subscription</Text>{"\n"}</Text>,
+            label: <Text>OpenAI Codex browser login (legacy) ·{" "}<Text dimColor={true}>ChatGPT Plus/Pro subscription</Text>{"\n"}</Text>,
             value: "codex"
           }];
           $[5] = t6;

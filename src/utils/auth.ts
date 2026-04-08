@@ -77,6 +77,7 @@ import {
 import { sleep } from './sleep.js'
 import { jsonParse } from './slowOperations.js'
 import { clearToolSchemaCache } from './toolSchemaCache.js'
+import { isOpenAICompatProviderConfigured } from './openaiCompatConfig.js'
 
 /** Default TTL for API key helper cache in milliseconds (5 minutes) */
 const DEFAULT_API_KEY_HELPER_TTL = 5 * 60 * 1000
@@ -113,10 +114,12 @@ export function isAnthropicAuthEnabled(): boolean {
     return !!process.env.CLAUDE_CODE_OAUTH_TOKEN
   }
 
-  const is3P =
+  const isAlternateProvider =
     isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
     isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
+    isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
+    isEnvTruthy(process.env.CLAUDE_CODE_USE_OPENAI) ||
+    isOpenAICompatProviderConfigured()
 
   // Check if user has configured an external API key source
   // This allows externally-provided API keys to work (without requiring proxy configuration)
@@ -135,14 +138,14 @@ export function isAnthropicAuthEnabled(): boolean {
     apiKeySource === 'ANTHROPIC_API_KEY' || apiKeySource === 'apiKeyHelper'
 
   // Disable Anthropic auth if:
-  // 1. Using 3rd party services (Bedrock/Vertex/Foundry)
+  // 1. Using a non-Anthropic provider (Bedrock/Vertex/Foundry/OpenAI)
   // 2. User has an external API key (regardless of proxy configuration)
   // 3. User has an external auth token (regardless of proxy configuration)
   // this may cause issues if users have complex proxy / gateway "client-side creds" auth scenarios,
   // e.g. if they want to set X-Api-Key to a gateway key but use Anthropic OAuth for the Authorization
   // if we get reports of that, we should probably add an env var to force OAuth enablement
   const shouldDisableAuth =
-    is3P ||
+    isAlternateProvider ||
     (hasExternalAuthToken && !isManagedOAuthContext()) ||
     (hasExternalApiKey && !isManagedOAuthContext())
 
@@ -1366,6 +1369,11 @@ export function clearCodexOAuthTokens(): void {
   })
 }
 
+export function getOpenAIApiKey(): string | null {
+  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  return apiKey ? apiKey : null
+}
+
 
 let lastCredentialsMtimeMs = 0
 
@@ -1627,12 +1635,16 @@ export function isClaudeAISubscriber(): boolean {
 }
 
 export function isCodexSubscriber(): boolean {
-  // Only treat as Codex subscriber when explicitly using OpenAI provider
+  // OpenAI-specific model routing/billing should apply whenever the OpenAI
+  // provider is selected and we have either a direct API key or Codex OAuth.
   if (getAPIProvider() !== 'openai') {
     return false
   }
 
-  // Verify we actually have valid Codex tokens
+  if (getOpenAIApiKey()) {
+    return true
+  }
+
   const tokens = getCodexOAuthTokens()
   return !!tokens?.accessToken
 }
@@ -1796,12 +1808,14 @@ export function getSubscriptionName(): string {
   }
 }
 
-/** Check if using third-party services (Bedrock or Vertex or Foundry) */
+/** Check if using a non-Anthropic provider (Bedrock, Vertex, Foundry, or OpenAI) */
 export function isUsing3PServices(): boolean {
   return !!(
     isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
     isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
+    isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
+    isEnvTruthy(process.env.CLAUDE_CODE_USE_OPENAI) ||
+    isOpenAICompatProviderConfigured()
   )
 }
 

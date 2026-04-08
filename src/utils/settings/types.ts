@@ -713,6 +713,42 @@ export const SettingsSchema = lazySchema(() =>
         .string()
         .optional()
         .describe('Advisor model for the server-side advisor tool.'),
+      reviewModel: z
+        .string()
+        .optional()
+        .describe(
+          'Review model for explicit review workflows. Stored separately from advisorModel and does not auto-enable or reuse the advisor tool.',
+        ),
+      openaiBaseUrl: z
+        .string()
+        .optional()
+        .describe(
+          'Base URL override for OpenAI-compatible direct responses endpoints.',
+        ),
+      openaiWireApi: z
+        .string()
+        .optional()
+        .describe(
+          'Wire API identifier for OpenAI-compatible providers (for example "responses").',
+        ),
+      modelReasoningEffort: z
+        .string()
+        .optional()
+        .describe(
+          'Raw reasoning effort setting for OpenAI-compatible direct providers (for example "high" or "xhigh").',
+        ),
+      modelContextWindow: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Explicit context window size override for the active provider model.'),
+      modelAutoCompactTokenLimit: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Explicit auto-compact trigger threshold in tokens.'),
       fastMode: z
         .boolean()
         .optional()

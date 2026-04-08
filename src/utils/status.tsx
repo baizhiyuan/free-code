@@ -18,8 +18,9 @@ import { getProxyUrl } from './proxy.js';
 import { SandboxManager } from './sandbox/sandbox-adapter.js';
 import { getSettingsWithAllErrors } from './settings/allErrors.js';
 import { getEnabledSettingSources, getSettingSourceDisplayNameCapitalized } from './settings/constants.js';
-import { getManagedFileSettingsPresence, getPolicySettingsOrigin, getSettingsForSource } from './settings/settings.js';
+import { getManagedFileSettingsPresence, getPolicySettingsOrigin, getSettingsForSource, getSettings_DEPRECATED } from './settings/settings.js';
 import type { ThemeName } from './theme.js';
+import { getConfiguredModelAutoCompactTokenLimit, getConfiguredModelContextWindow, getConfiguredReasoningEffort, getConfiguredReviewModel, getOpenAIBaseUrl, getOpenAIWireApi } from './openaiCompatConfig.js';
 export type Property = {
   label?: string;
   value: React.ReactNode | Array<string>;
@@ -239,9 +240,11 @@ export function buildAccountProperties(): Property[] {
 }
 export function buildAPIProviderProperties(): Property[] {
   const apiProvider = getAPIProvider();
+  const settings = getSettings_DEPRECATED() || {};
   const properties: Property[] = [];
   if (apiProvider !== 'firstParty') {
     const providerLabel = {
+      openai: 'OpenAI',
       bedrock: 'AWS Bedrock',
       vertex: 'Google Vertex AI',
       foundry: 'Microsoft Foundry'
@@ -257,6 +260,49 @@ export function buildAPIProviderProperties(): Property[] {
       properties.push({
         label: 'Anthropic base URL',
         value: anthropicBaseUrl
+      });
+    }
+  } else if (apiProvider === 'openai') {
+    const openAIBaseUrl = settings.openaiBaseUrl || getOpenAIBaseUrl();
+    if (openAIBaseUrl) {
+      properties.push({
+        label: 'OpenAI base URL',
+        value: openAIBaseUrl
+      });
+    }
+    const wireApi = settings.openaiWireApi || getOpenAIWireApi();
+    if (wireApi) {
+      properties.push({
+        label: 'OpenAI wire API',
+        value: wireApi
+      });
+    }
+    const reviewModel = settings.reviewModel || getConfiguredReviewModel();
+    if (reviewModel) {
+      properties.push({
+        label: 'Review model',
+        value: reviewModel
+      });
+    }
+    const reasoningEffort = settings.modelReasoningEffort || getConfiguredReasoningEffort();
+    if (reasoningEffort) {
+      properties.push({
+        label: 'Reasoning effort',
+        value: reasoningEffort
+      });
+    }
+    const contextWindow = settings.modelContextWindow || getConfiguredModelContextWindow();
+    if (contextWindow) {
+      properties.push({
+        label: 'Context window',
+        value: String(contextWindow)
+      });
+    }
+    const autoCompactLimit = settings.modelAutoCompactTokenLimit || getConfiguredModelAutoCompactTokenLimit();
+    if (autoCompactLimit) {
+      properties.push({
+        label: 'Auto-compact limit',
+        value: String(autoCompactLimit)
       });
     }
   } else if (apiProvider === 'bedrock') {

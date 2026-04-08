@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/paoloanzn/free-code/main/install.sh
 
 Checks your system, installs Bun if needed, clones the repo, builds with all experimental features enabled, and symlinks `free-code` on your PATH.
 
-Then run `free-code` and use the `/login` command to authenticate with your preferred model provider.
+Then run `free-code` and authenticate with the provider path you want: use `/login` for Anthropic or legacy browser auth, or set `OPENAI_API_KEY` for OpenAI direct mode.
 
 ---
 
@@ -89,9 +89,9 @@ Use Anthropic's first-party API directly.
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` |
 | Claude Haiku 4.5 | `claude-haiku-4-5` |
 
-### OpenAI Codex
+### OpenAI Direct
 
-Use OpenAI's Codex models for code generation. Requires a Codex subscription.
+Use OpenAI-compatible models through the OpenAI provider path. The primary setup uses `OPENAI_API_KEY`; browser OAuth is only for the legacy Codex web flow.
 
 | Model | ID |
 |---|---|
@@ -101,7 +101,29 @@ Use OpenAI's Codex models for code generation. Requires a Codex subscription.
 
 ```bash
 export CLAUDE_CODE_USE_OPENAI=1
+export OPENAI_API_KEY="sk-..."
+export OPENAI_BASE_URL="http://localhost:9090"
 free-code
+```
+
+Or use the Codex-style compatibility file at `~/.codex/config.toml`:
+
+```toml
+model_provider = "OpenAI"
+model = "gpt-5.4"
+review_model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
+disable_response_storage = true
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000
+
+[model_providers.OpenAI]
+name = "OpenAI"
+base_url = "http://localhost:9090"
+wire_api = "responses"
+requires_openai_auth = true
 ```
 
 ### AWS Bedrock
@@ -152,7 +174,7 @@ Supports custom deployment IDs as model names.
 | Provider | Env Variable | Auth Method |
 |---|---|---|
 | Anthropic (default) | -- | `ANTHROPIC_API_KEY` or OAuth |
-| OpenAI Codex | `CLAUDE_CODE_USE_OPENAI=1` | OAuth via OpenAI |
+| OpenAI direct | `CLAUDE_CODE_USE_OPENAI=1` | `OPENAI_API_KEY` |
 | AWS Bedrock | `CLAUDE_CODE_USE_BEDROCK=1` | AWS credentials |
 | Google Vertex AI | `CLAUDE_CODE_USE_VERTEX=1` | `gcloud` ADC |
 | Anthropic Foundry | `CLAUDE_CODE_USE_FOUNDRY=1` | `ANTHROPIC_FOUNDRY_API_KEY` |
@@ -163,7 +185,7 @@ Supports custom deployment IDs as model names.
 
 - **Runtime**: [Bun](https://bun.sh) >= 1.3.11
 - **OS**: macOS or Linux (Windows via WSL)
-- **Auth**: An API key or OAuth login for your chosen provider
+- **Auth**: Provider-native credentials for your chosen provider
 
 ```bash
 # Install Bun if you don't have it

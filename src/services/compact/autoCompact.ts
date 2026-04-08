@@ -11,6 +11,8 @@ import { isEnvTruthy } from '../../utils/envUtils.js'
 import { hasExactErrorMessage } from '../../utils/errors.js'
 import type { CacheSafeParams } from '../../utils/forkedAgent.js'
 import { logError } from '../../utils/log.js'
+import { getConfiguredModelAutoCompactTokenLimit } from '../../utils/openaiCompatConfig.js'
+import { getSettings_DEPRECATED } from '../../utils/settings/settings.js'
 import { tokenCountWithEstimation } from '../../utils/tokens.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../analytics/growthbook.js'
 import { getMaxOutputTokensForModel } from '../api/claude.js'
@@ -70,6 +72,13 @@ export const MANUAL_COMPACT_BUFFER_TOKENS = 3_000
 const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
 
 export function getAutoCompactThreshold(model: string): number {
+  const configuredLimit =
+    getSettings_DEPRECATED()?.modelAutoCompactTokenLimit ??
+    getConfiguredModelAutoCompactTokenLimit()
+  if (configuredLimit && configuredLimit > 0) {
+    return configuredLimit
+  }
+
   const effectiveContextWindow = getEffectiveContextWindowSize(model)
 
   const autocompactThreshold =

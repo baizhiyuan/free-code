@@ -104,6 +104,47 @@ export const SUPPORTED_SETTINGS: Record<string, SettingConfig> = {
     validateOnWrite: v => validateModel(String(v)),
     formatOnRead: v => (v === null ? 'default' : v),
   },
+  reviewModel: {
+    source: 'settings',
+    type: 'string',
+    description:
+      'Configure a separate review model without enabling or reusing the advisor tool',
+    getOptions: () => {
+      try {
+        return getModelOptions()
+          .filter(o => o.value !== null)
+          .map(o => o.value as string)
+      } catch {
+        return ['sonnet', 'opus', 'haiku']
+      }
+    },
+    validateOnWrite: v => validateModel(String(v)),
+  },
+  openaiBaseUrl: {
+    source: 'settings',
+    type: 'string',
+    description: 'Override the OpenAI-compatible direct responses base URL',
+  },
+  openaiWireApi: {
+    source: 'settings',
+    type: 'string',
+    description: 'Set the OpenAI-compatible wire API identifier (for example "responses")',
+  },
+  modelReasoningEffort: {
+    source: 'settings',
+    type: 'string',
+    description: 'Set raw reasoning effort for OpenAI-compatible direct providers',
+  },
+  modelContextWindow: {
+    source: 'settings',
+    type: 'string',
+    description: 'Override the effective model context window in tokens',
+  },
+  modelAutoCompactTokenLimit: {
+    source: 'settings',
+    type: 'string',
+    description: 'Override the auto-compact trigger threshold in tokens',
+  },
   alwaysThinkingEnabled: {
     source: 'settings',
     type: 'boolean',

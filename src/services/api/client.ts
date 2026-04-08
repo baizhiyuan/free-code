@@ -12,8 +12,8 @@ import {
   getApiKeyFromApiKeyHelper,
   getClaudeAIOAuthTokens,
   getCodexOAuthTokens,
+  getOpenAIApiKey,
   isClaudeAISubscriber,
-  isCodexSubscriber,
   refreshAndGetAwsCredentials,
   refreshGcpCredentialsIfNeeded,
 } from 'src/utils/auth.js'
@@ -42,6 +42,10 @@ import { createCodexFetch } from './codex-fetch-adapter.js'
  *
  * Direct API:
  * - ANTHROPIC_API_KEY: Required for direct API access
+ *
+ * OpenAI direct API:
+ * - OPENAI_API_KEY: Preferred authentication for CLAUDE_CODE_USE_OPENAI=1
+ * - OPENAI_BASE_URL: Optional base URL override for OpenAI-compatible responses endpoints
  *
  * AWS Bedrock:
  * - AWS credentials configured via aws-sdk defaults
@@ -90,6 +94,34 @@ function createStderrLogger(): ClientOptions['logger'] {
     debug: (msg, ...args) =>
       // biome-ignore lint/suspicious/noConsole:: intentional console output -- SDK logger must use console
       console.error('[Anthropic SDK DEBUG]', msg, ...args),
+  }
+}
+
+function createMissingOpenAIAuthFetch(): typeof globalThis.fetch {
+  return async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const url = input instanceof Request ? input.url : String(input)
+
+    if (!url.includes('/v1/messages')) {
+      return globalThis.fetch(input, init)
+    }
+
+    return new Response(
+      JSON.stringify({
+        type: 'error',
+        error: {
+          type: 'authentication_error',
+          message:
+            'OpenAI provider requires OPENAI_API_KEY (preferred) or existing Codex OAuth credentials.',
+        },
+      }),
+      {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
   }
 }
 
@@ -305,19 +337,26 @@ export async function getAnthropicClient({
     return new AnthropicVertex(vertexArgs) as unknown as Anthropic
   }
 
-  // ── Codex (OpenAI) provider via fetch adapter ─────────────────────
-  if (isCodexSubscriber()) {
+  // ── OpenAI provider via Responses API / Codex adapter ─────────────
+  if (getAPIProvider() === 'openai') {
+    const openAIApiKey = getOpenAIApiKey()
     const codexTokens = getCodexOAuthTokens()
-    if (codexTokens?.accessToken) {
-      const codexFetch = createCodexFetch(codexTokens.accessToken)
-      const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
-        apiKey: 'codex-placeholder', // SDK requires a key but the fetch adapter handles auth
-        ...ARGS,
-        fetch: codexFetch as unknown as typeof globalThis.fetch,
-        ...(isDebugToStdErr() && { logger: createStderrLogger() }),
-      }
-      return new Anthropic(clientConfig)
+    const openAIFetch = openAIApiKey
+      ? createCodexFetch({ mode: 'apiKey', apiKey: openAIApiKey })
+      : codexTokens?.accessToken
+        ? createCodexFetch({
+            mode: 'oauth',
+            accessToken: codexTokens.accessToken,
+          })
+        : createMissingOpenAIAuthFetch()
+
+    const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
+      apiKey: 'openai-placeholder', // SDK requires a key but the fetch adapter handles auth
+      ...ARGS,
+      fetch: openAIFetch as unknown as typeof globalThis.fetch,
+      ...(isDebugToStdErr() && { logger: createStderrLogger() }),
     }
+    return new Anthropic(clientConfig)
   }
 
   // Determine authentication method based on available tokens

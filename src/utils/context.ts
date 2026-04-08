@@ -4,6 +4,9 @@ import { getGlobalConfig } from './config.js'
 import { isEnvTruthy } from './envUtils.js'
 import { getCanonicalName } from './model/model.js'
 import { getModelCapability } from './model/modelCapabilities.js'
+import { getConfiguredModelContextWindow } from './openaiCompatConfig.js'
+import { getAPIProvider } from './model/providers.js'
+import { getSettings_DEPRECATED } from './settings/settings.js'
 
 // Model context window size (200k tokens for all models right now)
 export const MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
@@ -52,6 +55,15 @@ export function getContextWindowForModel(
   model: string,
   betas?: string[],
 ): number {
+  if (getAPIProvider() === 'openai') {
+    const configuredWindow =
+      getSettings_DEPRECATED()?.modelContextWindow ??
+      getConfiguredModelContextWindow()
+    if (configuredWindow && configuredWindow > 0) {
+      return configuredWindow
+    }
+  }
+
   // Allow override via environment variable (ant-only)
   // This takes precedence over all other context window resolution, including 1M detection,
   // so users can cap the effective context window for local decisions (auto-compact, etc.)

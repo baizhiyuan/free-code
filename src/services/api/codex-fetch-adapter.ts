@@ -1,9 +1,11 @@
 /**
  * Codex Fetch Adapter
  *
- * Intercepts fetch calls from the Anthropic SDK and routes them to
- * ChatGPT's Codex backend API, translating between Anthropic Messages API
- * format and OpenAI Responses API format.
+ * Thin adapter over the provider-neutral OpenAI Responses core.
+ *
+ * This module keeps Codex/OpenAI model mapping plus Anthropic↔Responses
+ * translation behavior, while openai-responses-core.ts owns the generic
+ * intercepted-fetch lifecycle for direct and fallback transports.
  *
  * Supports:
  * - Text messages (user/assistant)
@@ -12,10 +14,21 @@
  * - Tool use (tool_use → function_call, tool_result → function_call_output)
  * - Streaming events translation
  *
- * Endpoint: https://chatgpt.com/backend-api/codex/responses
+ * Core transport: src/services/api/openai-responses-core.ts
+ * Primary endpoint: https://api.openai.com/v1/responses
+ * OAuth fallback: https://chatgpt.com/backend-api/codex/responses
  */
 
 import { getCodexOAuthTokens } from '../../utils/auth.js'
+import {
+  getConfiguredReasoningEffort,
+  getOpenAIBaseUrl,
+} from '../../utils/openaiCompatConfig.js'
+import { getSettings_DEPRECATED } from '../../utils/settings/settings.js'
+import {
+  createOpenAIResponsesFetch,
+  type OpenAIResponsesRequestConfig,
+} from './openai-responses-core.js'
 
 // ── Available Codex models ──────────────────────────────────────────
 export const CODEX_MODELS = [
@@ -100,6 +113,17 @@ interface AnthropicTool {
   input_schema?: Record<string, unknown>
 }
 
+type OpenAIAuthConfig =
+  | {
+      mode: 'apiKey'
+      apiKey: string
+      baseUrl?: string
+    }
+  | {
+      mode: 'oauth'
+      accessToken: string
+    }
+
 // ── Tool translation: Anthropic → Codex ─────────────────────────────
 
 /**
@@ -113,7 +137,6 @@ function translateTools(anthropicTools: AnthropicTool[]): Array<Record<string, u
     name: tool.name,
     description: tool.description || '',
     parameters: tool.input_schema || { type: 'object', properties: {} },
-    strict: null,
   }))
 }
 
@@ -222,6 +245,13 @@ function translateMessages(
 function translateToCodexBody(anthropicBody: Record<string, unknown>): {
   codexBody: Record<string, unknown>
   codexModel: string
+}
+function translateToCodexBody(
+  anthropicBody: Record<string, unknown>,
+  reasoningEffort?: string,
+): {
+  codexBody: Record<string, unknown>
+  codexModel: string
 } {
   const anthropicMessages = (anthropicBody.messages || []) as AnthropicMessage[]
   const systemPrompt = anthropicBody.system as
@@ -258,6 +288,12 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
     input,
     tool_choice: 'auto',
     parallel_tool_calls: true,
+  }
+
+  if (reasoningEffort) {
+    codexBody.reasoning = {
+      effort: reasoningEffort,
+    }
   }
 
   // Add tools if present
@@ -736,77 +772,66 @@ async function translateCodexStreamToAnthropic(
 
 // ── Main fetch interceptor ──────────────────────────────────────────
 
-const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex/responses'
+const OPENAI_RESPONSES_BASE_URL = 'https://api.openai.com/v1/responses'
+const CHATGPT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex/responses'
+
+function getOpenAIResponsesUrl(baseUrl?: string): string {
+  const normalizedBase = (
+    baseUrl ??
+    getSettings_DEPRECATED()?.openaiBaseUrl ??
+    getOpenAIBaseUrl() ??
+    OPENAI_RESPONSES_BASE_URL
+  )
+    .replace(/\/$/, '')
+
+  return normalizedBase.endsWith('/responses')
+    ? normalizedBase
+    : `${normalizedBase}/responses`
+}
 
 /**
- * Creates a fetch function that intercepts Anthropic API calls and routes them to Codex.
- * @param accessToken - The Codex access token for authentication
+ * Creates a fetch function that intercepts Anthropic API calls and routes them to OpenAI.
  * @returns A fetch function that translates Anthropic requests to Codex format
  */
 export function createCodexFetch(
-  accessToken: string,
+  auth: OpenAIAuthConfig,
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
-  const accountId = extractAccountId(accessToken)
+  const resolveRequestConfig = (): OpenAIResponsesRequestConfig =>
+    auth.mode === 'apiKey'
+      ? {
+          url: getOpenAIResponsesUrl(auth.baseUrl),
+          authorization: auth.apiKey,
+        }
+      : (() => {
+          const currentToken =
+            getCodexOAuthTokens()?.accessToken || auth.accessToken
 
-  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = input instanceof Request ? input.url : String(input)
+          return {
+            url: CHATGPT_CODEX_BASE_URL,
+            authorization: currentToken,
+            extraHeaders: {
+              'chatgpt-account-id': extractAccountId(currentToken),
+              originator: 'pi',
+              'OpenAI-Beta': 'responses=experimental',
+            },
+          }
+        })()
 
-    // Only intercept Anthropic API message calls
-    if (!url.includes('/v1/messages')) {
-      return globalThis.fetch(input, init)
-    }
-
-    // Parse the Anthropic request body
-    let anthropicBody: Record<string, unknown>
-    try {
-      const bodyText =
-        init?.body instanceof ReadableStream
-          ? await new Response(init.body).text()
-          : typeof init?.body === 'string'
-            ? init.body
-            : '{}'
-      anthropicBody = JSON.parse(bodyText)
-    } catch {
-      anthropicBody = {}
-    }
-
-    // Get current token (may have been refreshed)
-    const tokens = getCodexOAuthTokens()
-    const currentToken = tokens?.accessToken || accessToken
-
-    // Translate to Codex format
-    const { codexBody, codexModel } = translateToCodexBody(anthropicBody)
-
-    // Call Codex API
-    const codexResponse = await globalThis.fetch(CODEX_BASE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        Authorization: `Bearer ${currentToken}`,
-        'chatgpt-account-id': accountId,
-        originator: 'pi',
-        'OpenAI-Beta': 'responses=experimental',
-      },
-      body: JSON.stringify(codexBody),
-    })
-
-    if (!codexResponse.ok) {
-      const errorText = await codexResponse.text()
-      const errorBody = {
-        type: 'error',
-        error: {
-          type: 'api_error',
-          message: `Codex API error (${codexResponse.status}): ${errorText}`,
-        },
+  return createOpenAIResponsesFetch({
+    resolveRequestConfig,
+    translateAnthropicRequest: anthropicBody => {
+      const { codexBody, codexModel } = translateToCodexBody(
+        anthropicBody,
+        auth.mode === 'apiKey'
+          ? getSettings_DEPRECATED()?.modelReasoningEffort ??
+            getConfiguredReasoningEffort()
+          : undefined,
+      )
+      return {
+        requestBody: codexBody,
+        model: codexModel,
       }
-      return new Response(JSON.stringify(errorBody), {
-        status: codexResponse.status,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Translate streaming response
-    return translateCodexStreamToAnthropic(codexResponse, codexModel)
-  }
+    },
+    translateStream: translateCodexStreamToAnthropic,
+  })
 }

@@ -46,6 +46,7 @@ import { FILE_READ_TOOL_NAME } from '../FileReadTool/prompt.js';
 import { spawnTeammate } from '../shared/spawnMultiAgent.js';
 import { setAgentColor } from './agentColorManager.js';
 import { agentToolResultSchema, classifyHandoffIfNeeded, emitTaskProgress, extractPartialResult, finalizeAgentTool, getLastToolUseName, runAsyncAgentLifecycle } from './agentToolUtils.js';
+import { CLAUDE_CODE_GUIDE_AGENT_TYPE } from './built-in/claudeCodeGuideAgent.js';
 import { GENERAL_PURPOSE_AGENT } from './built-in/generalPurposeAgent.js';
 import { AGENT_TOOL_NAME, LEGACY_AGENT_TOOL_NAME, ONE_SHOT_BUILTIN_AGENT_TYPES } from './constants.js';
 import { buildForkedMessages, buildWorktreeNotice, FORK_AGENT, isForkSubagentEnabled, isInForkChild } from './forkSubagent.js';
@@ -74,6 +75,16 @@ function getAutoBackgroundMs(): number {
     return 120_000;
   }
   return 0;
+}
+
+function canFallBackFromWorktreeIsolation(agentType: string): boolean {
+  return agentType === CLAUDE_CODE_GUIDE_AGENT_TYPE;
+}
+
+function isMissingAgentWorktreeSupportError(error: unknown): boolean {
+  return errorMessage(error).includes(
+    'Cannot create agent worktree: not in a git repository and no WorktreeCreate hooks are configured.',
+  );
 }
 
 // Multi-agent type constants are defined inline inside gated blocks to enable dead code elimination
@@ -589,7 +600,21 @@ export const AgentTool = buildTool({
     } | null = null;
     if (effectiveIsolation === 'worktree') {
       const slug = `agent-${earlyAgentId.slice(0, 8)}`;
-      worktreeInfo = await createAgentWorktree(slug);
+      try {
+        worktreeInfo = await createAgentWorktree(slug);
+      } catch (error) {
+        if (
+          canFallBackFromWorktreeIsolation(selectedAgent.agentType) &&
+          isMissingAgentWorktreeSupportError(error)
+        ) {
+          logForDebugging(
+            `[AgentTool] Falling back to non-worktree execution for ${selectedAgent.agentType}: ${errorMessage(error)}`,
+            { level: 'error' },
+          );
+        } else {
+          throw error;
+        }
+      }
     }
 
     // Fork + worktree: inject a notice telling the child to translate paths

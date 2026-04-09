@@ -51,6 +51,7 @@ import {
 } from '../../utils/swarm/spawnInProcess.js'
 import { buildInheritedEnvVars } from '../../utils/swarm/spawnUtils.js'
 import {
+  ensureTeamFileAsync,
   readTeamFileAsync,
   sanitizeAgentName,
   sanitizeName,
@@ -486,12 +487,10 @@ async function handleSpawnSplitPane(
   })
 
   // Register agent in the team file
-  const teamFile = await readTeamFileAsync(teamName)
-  if (!teamFile) {
-    throw new Error(
-      `Team "${teamName}" does not exist. Call spawnTeam first to create the team.`,
-    )
-  }
+  const teamFile = await ensureTeamFileAsync(teamName, {
+    leadModel: getAppState().mainLoopModel ?? undefined,
+    cwd: getCwd(),
+  })
   teamFile.members.push({
     agentId: teammateId,
     name: sanitizedName,
@@ -700,12 +699,10 @@ async function handleSpawnSeparateWindow(
   })
 
   // Register agent in the team file
-  const teamFile = await readTeamFileAsync(teamName)
-  if (!teamFile) {
-    throw new Error(
-      `Team "${teamName}" does not exist. Call spawnTeam first to create the team.`,
-    )
-  }
+  const teamFile = await ensureTeamFileAsync(teamName, {
+    leadModel: getAppState().mainLoopModel ?? undefined,
+    cwd: getCwd(),
+  })
   teamFile.members.push({
     agentId: teammateId,
     name: sanitizedName,
@@ -986,12 +983,10 @@ async function handleSpawnInProcess(
   })
 
   // Register agent in the team file
-  const teamFile = await readTeamFileAsync(teamName)
-  if (!teamFile) {
-    throw new Error(
-      `Team "${teamName}" does not exist. Call spawnTeam first to create the team.`,
-    )
-  }
+  const teamFile = await ensureTeamFileAsync(teamName, {
+    leadModel: getAppState().mainLoopModel ?? undefined,
+    cwd: getCwd(),
+  })
   teamFile.members.push({
     agentId: teammateId,
     name: sanitizedName,

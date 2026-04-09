@@ -2,7 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { z } from 'zod/v4'
-import { getSessionCreatedTeams } from '../../bootstrap/state.js'
+import { getSessionCreatedTeams, getSessionId } from '../../bootstrap/state.js'
+import { formatAgentId } from '../agentId.js'
+import { getCwd } from '../cwd.js'
 import { logForDebugging } from '../debug.js'
 import { getTeamsDir } from '../envUtils.js'
 import { errorMessage, getErrnoCode } from '../errors.js'
@@ -11,7 +13,7 @@ import { gitExe } from '../git.js'
 import { lazySchema } from '../lazySchema.js'
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { jsonParse, jsonStringify } from '../slowOperations.js'
-import { getTasksDir, notifyTasksUpdated } from '../tasks.js'
+import { getTasksDir, notifyTasksUpdated, setLeaderTeamName } from '../tasks.js'
 import { getAgentName, getTeamName, isTeammate } from '../teammate.js'
 import { type BackendType, isPaneBackend } from './backends/types.js'
 import { TEAM_LEAD_NAME } from './constants.js'
@@ -179,6 +181,59 @@ export async function writeTeamFileAsync(
   const teamDir = getTeamDir(teamName)
   await mkdir(teamDir, { recursive: true })
   await writeFile(getTeamFilePath(teamName), jsonStringify(teamFile, null, 2))
+}
+
+/**
+ * Ensure a team file exists for ad-hoc teammate spawning.
+ *
+ * AgentTool can spawn named teammates without an explicit spawnTeam call. In
+ * that path we still need a backing team config on disk, otherwise later
+ * mailbox/team-file registration fails with `Team "default" does not exist`.
+ */
+export async function ensureTeamFileAsync(
+  teamName: string,
+  options?: {
+    description?: string
+    leadAgentType?: string
+    leadModel?: string
+    cwd?: string
+  },
+): Promise<TeamFile> {
+  const existing = await readTeamFileAsync(teamName)
+  if (existing) {
+    return existing
+  }
+
+  const leadAgentId = formatAgentId(TEAM_LEAD_NAME, teamName)
+  const teamFile: TeamFile = {
+    name: teamName,
+    description: options?.description,
+    createdAt: Date.now(),
+    leadAgentId,
+    leadSessionId: getSessionId(),
+    members: [
+      {
+        agentId: leadAgentId,
+        name: TEAM_LEAD_NAME,
+        agentType: options?.leadAgentType ?? TEAM_LEAD_NAME,
+        model: options?.leadModel,
+        joinedAt: Date.now(),
+        tmuxPaneId: '',
+        cwd: options?.cwd ?? getCwd(),
+        subscriptions: [],
+      },
+    ],
+  }
+
+  await writeTeamFileAsync(teamName, teamFile)
+  registerTeamForSessionCleanup(teamName)
+  if (!isTeammate()) {
+    setLeaderTeamName(sanitizeName(teamName))
+  }
+  logForDebugging(
+    `[TeammateTool] Auto-created missing team file for ${teamName}`,
+  )
+  return teamFile
 }
 
 /**

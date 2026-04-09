@@ -44,6 +44,14 @@ This creates:
 6. **Teammates go idle between turns** - after each turn, teammates automatically go idle and send a notification. IMPORTANT: Be patient with idle teammates! Don't comment on their idleness until it actually impacts your work.
 7. **Shutdown your team** - when the task is completed, gracefully shut down your teammates via SendMessage with \`message: {type: "shutdown_request"}\`.
 
+## Team mode in OpenAI/GPT sessions
+
+- If your current session is using the OpenAI provider, create the team **after** switching the main conversation to your GPT/OpenAI model.
+- Prefer teammate agents with \`model: "inherit"\` so they follow the current session model instead of falling back to an unrelated provider family.
+- **Use TeamCreate first**. The runtime can auto-bootstrap some ad-hoc teammate flows, but TeamCreate is still the canonical and least surprising path.
+- For write-capable agents, stay in a git repository or configure \`WorktreeCreate/WorktreeRemove\` hooks. Team mode still relies on worktree isolation for general code-editing agents.
+- Documentation/help agents can degrade more gracefully in non-git directories, but do not assume the same for general implementation agents.
+
 ## Task Ownership
 
 Tasks are assigned using TaskUpdate with the \`owner\` parameter. Any agent can set or change task ownership via TaskUpdate.

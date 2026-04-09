@@ -1,10 +1,10 @@
-import { CLAUDE_OPUS_4_6_CONFIG } from '../model/configs.js'
-import { getAPIProvider } from '../model/providers.js'
+import { getDefaultMainLoopModel } from '../model/model.js'
 
-// @[MODEL LAUNCH]: Update the fallback model below.
-// When the user has never set teammateDefaultModel in /config, new teammates
-// use Opus 4.6. Must be provider-aware so Bedrock/Vertex/Foundry customers get
-// the correct model ID.
+// When the user has never set teammateDefaultModel in /config and the spawn
+// request does not explicitly pass a model or inherit a parent one, teammates
+// should fall back to the session/provider default rather than a Claude-only
+// hardcoded model family. This keeps OpenAI sessions on GPT-class models and
+// preserves provider-aware defaults for Bedrock/Vertex/Foundry.
 export function getHardcodedTeammateModelFallback(): string {
-  return CLAUDE_OPUS_4_6_CONFIG[getAPIProvider()]
+  return getDefaultMainLoopModel()
 }

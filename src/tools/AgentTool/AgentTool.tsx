@@ -77,7 +77,7 @@ function getAutoBackgroundMs(): number {
   return 0;
 }
 
-function canFallBackFromWorktreeIsolation(agentType: string): boolean {
+export function canFallBackFromWorktreeIsolation(agentType: string): boolean {
   return agentType === CLAUDE_CODE_GUIDE_AGENT_TYPE;
 }
 

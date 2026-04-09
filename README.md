@@ -40,6 +40,7 @@ Then run `free-code` and authenticate with the provider path you want: use `/log
 - [Requirements](#requirements)
 - [Build](#build)
 - [Usage](#usage)
+- [Team Mode](#team-mode)
 - [Experimental Features](#experimental-features)
 - [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
@@ -277,6 +278,31 @@ bun run dev
 # OAuth login
 ./cli /login
 ```
+
+## Team Mode
+
+If you want to use the built-in team / teammate mode in this fork, use this flow:
+
+1. **Start in the provider/model you actually want**
+   - For GPT/OpenAI sessions, switch the main conversation to the OpenAI provider first.
+2. **Create a team explicitly**
+   - Use `TeamCreate` first instead of relying on an implicit `default` team.
+3. **Prefer teammate agents with `model: "inherit"`**
+   - That keeps teammates on the same GPT/OpenAI-capable model path as the parent session.
+4. **Run general write-capable agents inside a git repo**
+   - Team mode still expects git worktrees or configured `WorktreeCreate/WorktreeRemove` hooks for general code-editing agents.
+5. **Use guide/help agents for non-git troubleshooting**
+   - Documentation-focused agents such as `claude-code-guide` degrade more gracefully outside git repos, but that fallback is intentionally not global for all agents.
+
+### Team mode troubleshooting
+
+- **`Team "default" does not exist`**
+  - The safest fix is still to create a team explicitly before spawning teammates.
+- **`Cannot create agent worktree ... not in a git repository`**
+  - For normal write-capable agents, run inside a git repository or configure worktree hooks.
+  - For guide/help agents, this fork now falls back more gracefully in non-git directories.
+- **Want GPT teammates instead of Claude-family defaults**
+  - Keep the session on the OpenAI provider and use `model: "inherit"` for spawned teammates.
 
 ### Environment Variables Reference
 
